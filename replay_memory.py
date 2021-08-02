@@ -2,14 +2,15 @@ import numpy as np
 import random
 
 class ReplayMemory:
+    # TODO: -> None
     def __init__(self, config) -> None:
         self.memory_size = config.memory_size
         self.batch_size = config.batch_size
         self.history_length = config.history_length
         self.actions = np.empty(self.memory_size, dtype=np.uint8)
         self.screens = np.empty((self.memory_size, config.screen_height, config.screen_width), dtype=np.float16)
-        self.rewards = np.empty(self.memory_size, dtype=np.integer)
-        self.terminals = np.empty(self.memory_size, dtype=np.bool)
+        self.rewards = np.empty(self.memory_size, dtype=np.int8)
+        self.terminals = np.empty(self.memory_size, dtype=np.bool_)
         self.dims = (config.screen_height, config.screen_width)
         self.current = 0
         self.count = 0
