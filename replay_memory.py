@@ -21,7 +21,7 @@ class ReplayMemory:
     def add(self, action, screen, reward, terminal):
         assert screen.shape == self.dims, "screen's shape is unexpected."
         self.actions[self.current] = action
-        self.screens[self.current] = screen
+        self.screens[self.current, ...] = screen
         self.rewards[self.current] = reward
         self.terminals[self.current] = terminal
         # TODO:
@@ -47,8 +47,8 @@ class ReplayMemory:
                 if self.terminals[(index - self.history_length):index].any() == True:
                     continue
                 break
-            self.prestates[len(indexes)] = self.getState(index - 1)
-            self.poststates[len(indexes)] = self.getState(index)
+            self.prestates[len(indexes), ...] = self.getState(index - 1)
+            self.poststates[len(indexes), ...] = self.getState(index)
             # TODO:
             indexes.append(index)
 

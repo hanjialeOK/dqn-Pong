@@ -5,13 +5,12 @@ import torch.optim as optim
 import numpy as np
 
 from networks import Q_Network
+from replay_memory import ReplayMemory
+from history import History
 
 class Agent:
-
-    def __init__(self, state_size, action_size, bs, lr, tau, gamma, device):
-        self.state_size = state_size
-        self.action_size = action_size
-        self.bs = bs
+    def __init__(self, config):
+        self.batch_size = config.batch
         self.lr = lr
         self.tau = tau
         self.gamma = gamma
