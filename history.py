@@ -9,4 +9,4 @@ class History:
         self.history[-1] = screen
 
     def get(self):
-        return self.history
+        return np.expand_dims(self.history, axis=0)

@@ -4,11 +4,18 @@ import torch
 import torch.optim as optim
 import numpy as np
 import gym
-import tqdm
+from tqdm import tqdm
 
 from networks import Q_Network
 from replay_memory import ReplayMemory
 from history import History
+
+def preprocess(image):
+    image = image[34:194, :, :]
+    image = image[::2, ::2]
+    image = np.mean(image, axis=2, keepdims=False)
+    image = image/256
+    return image
 
 class Agent:
     def __init__(self, config):
@@ -18,14 +25,17 @@ class Agent:
         self.history_length = config.history_length
         self.learning_rate = config.learning_rate
         self.discount = config.discount
-        self.min_reward = config.min_rewrad
+        self.min_reward = config.min_reward
         self.max_reward = config.max_reward
         self.train_frequency = config.train_frequency
         self.target_q_update_step = config.target_q_update_step
-        self.device = device
-        self.Q_local = Q_Network(self.state_size, self.action_size).to(self.device)
-        self.Q_target = Q_Network(self.state_size, self.action_size).to(self.device)
-        self.soft_update(1)
+        self.ep_end = config.ep_end
+        self.ep_start = config.ep_start
+        self.ep_end_t = config.ep_end_t
+        self.device = torch.device("cuda:0")
+        self.Q_local = Q_Network(self.history_length, 2).to(self.device)
+        self.Q_target = Q_Network(self.history_length, 2).to(self.device)
+        self.update_target()
         self.optimizer = optim.Adam(self.Q_local.parameters(), self.learning_rate)
         self.memory = ReplayMemory(config)
         self.history = History(config)
@@ -34,7 +44,7 @@ class Agent:
     def e_greedy(self, states, eps):
         # TODO: update ep
         if random.random() > eps:
-            states = torch.tensor(states).to(self.device)
+            states = torch.tensor(states, dtype=torch.float32).to(self.device)
             with torch.no_grad():
                 action_values = self.Q_local(states)
             return np.argmax(action_values.cpu().data.numpy()) + 2
@@ -50,16 +60,11 @@ class Agent:
         # dones = torch.from_numpy(np.vstack([e[4] for e in experiences]).astype(np.uint8)).float().to(self.device)
 
         states, actions, rewards, next_states, terminals = self.memory.sample()
-        # np.float16 -> torch.float16
-        states = torch.tensor(states).to(self.device)
-        # np.uint8 -> torch.uint8
-        actions = torch.tensor(actions).to(self.device)
-        # np.int8 -> torch.int8
-        rewards = torch.tensor(rewards).to(self.device)
-        # np.float16 -> torch.float16
-        next_states = torch.tensor(next_states).to(self.device)
-        # np.bool_ -> torch.bool
-        terminals = torch.tensor(terminals).to(self.device)
+        states = torch.tensor(states, dtype=torch.float32).to(self.device)
+        actions = torch.tensor(actions, dtype=torch.int64).unsqueeze(1).to(self.device)
+        rewards = torch.tensor(rewards, dtype=torch.float32).unsqueeze(1).to(self.device)
+        next_states = torch.tensor(next_states, dtype=torch.float32).to(self.device)
+        terminals = torch.tensor(terminals, dtype=torch.float32).to(self.device)
 
         q_values = self.Q_local(states)
         # print(actions.view(-1, 32))
@@ -76,29 +81,38 @@ class Agent:
         loss.backward()
         self.optimizer.step()
 
-    def update_target(self, tau):
+    def update_target(self, tau=1.):
         for local_param, target_param in zip(self.Q_local.parameters(), self.Q_target.parameters()):
             target_param.data.copy_(tau * local_param.data + (1 - tau) * target_param.data)
 
     def train(self):
+        num_game, update_count, episode_reward = 0, 0, 0
+        total_reward, total_loss, total_q = 0., 0., 0.
+        episode_rewards = []
+
         screen = self.env.reset()
+        screen = preprocess(screen)
         for _ in range(self.history_length):
             self.history.add(screen)
 
-        for step in tqdm(range(0, self.max_step), ncols=70):
+        for step in tqdm(range(0, self.max_step), ncols=70, initial=0):
             if step == self.learn_start:
-                num_game, update_count, ep_reward = 0, 0, 0
+                num_game, update_count, episode_reward = 0, 0, 0
                 total_reward, total_loss, total_q = 0., 0., 0.
+                episode_rewards = []
             
             # TODO: update ep. 1. predict
-            action = self.e_greedy(self.history)
+            eps = self.ep_end + max(0., (self.ep_start - self.ep_end)*(self.ep_end_t - max(0., step - self.learn_start)) / self.ep_end_t)
+            action = self.e_greedy(self.history.get(), eps)
             # 2. act
             screen, reward, terminal, _ = self.env.step(action)
+            screen = preprocess(screen)
             # 3. observe
 
             reward = max(self.min_reward, min(self.max_reward, reward))
             self.history.add(screen)
-            self.memory.add(screen, reward, action, terminal)
+            self.memory.add(action, screen, reward, terminal)
+            episode_reward += reward
 
             if step >= self.learn_start:
                 if step % self.train_frequency == 0:
@@ -106,4 +120,12 @@ class Agent:
                 if step % self.target_q_update_step == self.target_q_update_step - 1:
                     self.update_target()
 
-            
+            if terminal == True:
+                print("episode: %d, reward: %f, is learning: %d" % (num_game, episode_reward, step >= self.learn_start))
+                episode_rewards.append(episode_reward)
+                episode_reward = 0;
+                num_game += 1
+                screen = self.env.reset()
+                screen = preprocess(screen)
+                for _ in range(self.history_length):
+                    self.history.add(screen)
