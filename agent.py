@@ -1,10 +1,12 @@
 import random
 from collections import deque
+from numpy.core.fromnumeric import argmax
 import torch
 import torch.optim as optim
 import numpy as np
 import gym
 from tqdm import tqdm
+import time
 
 from networks import Q_Network
 from replay_memory import ReplayMemory
@@ -15,6 +17,7 @@ class Agent:
     def __init__(self, config):
         self.max_step = config.max_step
         self.test_step = config._test_step
+        self.save_step = config._save_step
         self.learn_start = config.learn_start
         self.batch_size = config.batch_size
         self.history_length = config.history_length
@@ -89,13 +92,14 @@ class Agent:
         num_game, update_count, episode_reward = 0, 0, 0
         total_reward, self.total_loss, self.total_q = 0., 0., 0.
         episode_rewards = []
-        doc = open('rewards.txt','w')
+        doc = open("record.txt", 'w')
 
         screen = self.env.reset()
         for _ in range(self.history_length):
             self.history.add(screen)
 
-        for self.step in tqdm(range(0, self.max_step), ncols=70, initial=0):
+        for self.step in tqdm(range(0, self.max_step), ncols=70, initial=0, desc="Pong-v0 training "):
+            # initialize
             if self.step == self.learn_start:
                 num_game, update_count, episode_reward = 0, 0, 0
                 total_reward, self.total_loss, self.total_q = 0., 0., 0.
@@ -114,38 +118,94 @@ class Agent:
             if self.step >= self.learn_start:
                 if self.step % self.train_frequency == 0:
                     self.update_local()
+                    update_count += 1
                 if self.step % self.target_q_update_step == self.target_q_update_step - 1:
                     self.update_target()
 
-            self.history.add(screen)
             episode_reward += reward
             total_reward += reward
+
             if terminal == True:
-                # print("episode: %d, reward: %f" % (num_game, episode_reward))
+                print("episode: %d, reward: %f" % (num_game, episode_reward))
                 episode_rewards.append(episode_reward)
                 episode_reward = 0
                 num_game += 1
                 screen = self.env.reset()
                 for _ in range(self.history_length):
                     self.history.add(screen)
+            else:
+                self.history.add(screen)
 
             if self.step >= self.learn_start:
                 if self.step % self.test_step == self.test_step - 1:
                     avg_reward = total_reward / self.test_step
+                    avg_loss = self.total_loss / update_count
+                    avg_q = self.total_q / update_count
 
-                    # try:
-                    max_episode_reward = np.max(episode_rewards)
-                    min_episode_reward = np.min(episode_rewards)
-                    avg_episode_reward = np.mean(episode_rewards)
-                    # except:
-                    #     max_episode_reward, min_episode_reward, avg_episode_reward = 0., 0., 0.
+                    try:
+                        max_episode_reward = np.max(episode_rewards)
+                        min_episode_reward = np.min(episode_rewards)
+                        avg_episode_reward = np.mean(episode_rewards)
+                    except:
+                        max_episode_reward, min_episode_reward, avg_episode_reward = 0., 0., 0.
 
                     # print("avg_episode_reward: %f" % (avg_episode_reward))
-                    print("%f %f %f %f" % (avg_reward, max_episode_reward, min_episode_reward, avg_episode_reward), file=doc)
+                    print("%f %f %f %f %f %f" % (avg_reward, avg_loss, avg_q, max_episode_reward, min_episode_reward, avg_episode_reward), file=doc)
 
                     total_reward = 0
+                    self.total_loss = 0
+                    self.total_q = 0
+                    update_count =  0
                     episode_rewards = []
 
-        self.Q_local.to('cpu')
-        torch.save(self.Q_local.state_dict(), '{}.pth'.format("Pong-v0"))
+                if self.step % self.save_step == 0:
+                    # self.Q_local.to('cpu')
+                    torch.save(self.Q_local.state_dict(), "{}_v%d.pth".format("Pong-v0") % (self.step/self.save_step))
+                    # self.Q_local.to(self.device)
+
+        # self.Q_local.to('cpu')
+        torch.save(self.Q_local.state_dict(), "{}_final.pth".format("Pong-v0"))
         doc.close()
+
+    def play(self):
+
+        print("loading weight...")
+        self.Q_local.to('cpu')
+        self.Q_local.load_state_dict(torch.load("Pong-v0_v11.pth"))
+        self.Q_local.to(self.device)
+        print("weight loaded successfully.")
+
+        screen = self.env.reset()
+        for _ in range(self.history_length):
+            self.history.add(screen)
+
+        episode_reward, num_game = 0, 0
+
+        for step in tqdm(range(0, 100000), ncols=70, desc="Pong-v0 playing"):
+            # 1. predict
+            states = torch.tensor(self.history.get(), dtype=torch.float32).to(self.device)
+            with torch.no_grad():
+                predict = self.Q_local(states)
+            action = np.argmax(predict.cpu().data.numpy())
+
+            # 2. act
+            screen, reward, terminal, _ = self.env.step(action)
+
+            # 3. render
+            self.env.render()
+
+            episode_reward += reward
+
+            if terminal == True:
+                print("episode: %d, reward: %f" % (num_game, episode_reward))
+                episode_reward = 0
+                num_game += 1
+                self.env.reset()
+                for _ in range(self.history_length):
+                    self.history.add(screen)
+            else:
+                self.history.add(screen)
+
+            time.sleep(0.01)
+        
+        self.env.close()
