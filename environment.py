@@ -14,7 +14,13 @@ class Environment:
         self.max_reward = config.max_reward
         self.env = gym.make('Pong-v0')
 
-    def reset(self) -> np.array:
+    def render(self):
+        self.env.render()
+
+    def close(self):
+        self.env.close()
+
+    def reset(self):
         screen = self.env.reset()
         return preprocess(screen)
 
