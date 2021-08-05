@@ -5,6 +5,8 @@ import torch.optim as optim
 import numpy as np
 from tqdm import tqdm
 import time
+import os
+import matplotlib.pyplot as plt
 
 from networks import Q_Network
 from replay_memory import ReplayMemory
@@ -30,6 +32,7 @@ class Agent:
         self.ep_start = config.ep_start
         self.ep_end_t = config.ep_end_t
         self.eps = self.ep_start
+        self.env_name = config.env_name
         self.device = torch.device("cuda:0")
         self.local_network = Q_Network(self.history_length, self.num_action).to(self.device)
         self.target_network = Q_Network(self.history_length, self.num_action).to(self.device)
@@ -78,6 +81,7 @@ class Agent:
         # [32, 4, 80, 80]
         next_states = torch.tensor(next_states, dtype=torch.float32).to(self.device)
         # [32, 1]
+        assert terminals.shape == (self.batch_size, 1), "terminals.shape is not correct."
         terminals = torch.tensor(terminals, dtype=torch.float32).to(self.device)
 
         q_values = self.local_network(states)
@@ -109,14 +113,52 @@ class Agent:
             if self.step % self.target_q_update_step == self.target_q_update_step - 1:
                 self.update_target()
 
-    def save_model(self):
-        
+    def save_model(self, dir_name="models"):
+        if not os.path.exists(dir_name):
+            os.mkdir(dir_name)
+        torch.save(self.local_network.state_dict(), \
+            os.path.join(dir_name, "%s_v%d.pth" % (self.env_name, (self.step+1)/self.test_step)))
+
+    def save_checkpoint(self, dir_name="checkpoints"):
+        if not os.path.exists(dir_name):
+            os.mkdir(dir_name)
+        torch.save(self.local_network.state_dict(), \
+            os.path.join(dir_name, "%s_v%d.pth" % (self.env_name, (self.step+1)/self.save_step)))
+
+    def save_record(self, dir_name="records"):
+        if not os.path.exists(dir_name):
+            os.mkdir(dir_name)
+        doc = open(os.path.join(dir_name, "%s_record_v%d.txt" % (self.env_name, (self.step+1)/self.save_step)), 'w')
+        for i in len(self.avg_qs):
+            print("%f %f %f %f %f" % (self.avg_qs[i], self.max_episode_rewards[i], \
+                self.min_episode_rewards[i], self.avg_episode_rewards[i], self.eps), file=doc)
+        doc.close()
+
+    def save_figure(self, dir_name="figures"):
+        if not os.path.exists(dir_name):
+            os.mkdir(dir_name)
+
+        fig = plt.figure()
+        plt.xlabel('step')
+        plt.ylabel('avg_q')
+        plt.plot(self.avg_qs)
+        plt.savefig(os.path.join(dir_name, "%s_avg_q_v%d.pdf" % (self.env_name, (self.step+1)/self.save_step)))
+
+        fig = plt.figure()
+        plt.xlabel('episode')
+        plt.ylabel('reward')
+        plt.plot(self.max_episode_rewards, color='r--', label='max_reward')
+        plt.plot(self.min_episode_rewards, color='g--', label='min_reward')
+        plt.plot(self.avg_episode_rewards, color='b', label='avg_reward')
+        plt.legend()
+        plt.savefig(os.path.join(dir_name, "%s_reward_v%d.pdf" % (self.env_name, (self.step+1)/self.save_step)))
 
     def train(self):
         num_game, self.update_count, episode_reward = 0, 0, 0
         total_reward, self.total_loss, self.total_q = 0., 0., 0.
+        max_avg_episode_reward = 0
         episode_rewards = []
-        doc = open("record.txt", 'w')
+        self.avg_qs, self.max_episode_rewards, self.min_episode_rewards, self.avg_episode_rewards = [], [], [], []
 
         screen = self.env.new_random_game()
         for _ in range(self.history_length):
@@ -170,8 +212,14 @@ class Agent:
                     except:
                         max_episode_reward, min_episode_reward, avg_episode_reward = 0., 0., 0.
 
-                    print("%f %f %f %f %f %f" % (avg_reward, avg_loss, avg_q, max_episode_reward, \
-                        min_episode_reward, avg_episode_reward), file=doc)
+                    self.avg_qs.append(avg_q)
+                    self.max_episode_rewards.append(max_episode_reward)
+                    self.min_episode_rewards.append(min_episode_reward)
+                    self.avg_episode_rewards.append(avg_episode_reward)
+
+                    if avg_episode_reward >= max_avg_episode_reward * 0.9:
+                        self.save_model("models")
+                    max_avg_episode_reward = max(max_avg_episode_reward, avg_episode_reward)
 
                     total_reward = 0
                     self.total_loss = 0
@@ -179,19 +227,16 @@ class Agent:
                     self.update_count =  0
                     episode_rewards = []
 
-                if self.step % self.save_step == 0:
-                    # self.local_network.to('cpu')
-                    torch.save(self.local_network.state_dict(), "{}_v%d.pth".format("Pong-v0") % (self.step/self.save_step))
-                    # self.local_network.to(self.device)
-
-        torch.save(self.local_network.state_dict(), "{}_final.pth".format("Pong-v0"))
-        doc.close()
+                if self.step % self.save_step == self.save_step - 1:
+                    self.save_checkpoint("checkpoints")
+                    self.save_figure("figures")
+                    self.save_record("records")
 
     def play(self):
 
         print("loading weight...")
         self.local_network.to('cpu')
-        self.local_network.load_state_dict(torch.load("Pong-v0_v43.pth"))
+        self.local_network.load_state_dict(torch.load("%s_v43.pth" % (self.env_name)))
         self.local_network.to(self.device)
         print("weight loaded successfully.")
 
@@ -201,7 +246,7 @@ class Agent:
 
         episode_reward, num_game = 0, 0
 
-        for step in tqdm(range(0, 100000), ncols=70, desc="Pong-v0 playing"):
+        for step in tqdm(range(0, 100000), ncols=70, desc="%s playing" % (self.env_name)):
             # 1. predict
             action = self.predict(self.history.get())
 
