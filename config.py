@@ -32,6 +32,7 @@ class Config:
     _test_step = 5 * scale
     _save_step = _test_step * 10
 
+    num_action = 3
     screen_width  = 80
     screen_height = 80
     max_reward = 1.
