@@ -86,7 +86,7 @@ class Agent:
 
         q_values = self.local_network(states)
         q_values = torch.gather(input=q_values, dim=-1, index=actions)
-        self.total_q += torch.mean(q_values)
+        self.total_q += torch.mean(q_values.detach()).cpu().item()
 
         with torch.no_grad():
             q_targets = self.target_network(next_states)
@@ -129,7 +129,8 @@ class Agent:
         if not os.path.exists(dir_name):
             os.mkdir(dir_name)
         doc = open(os.path.join(dir_name, "%s_record_v%d.txt" % (self.env_name, (self.step+1)/self.save_step)), 'w')
-        for i in len(self.avg_qs):
+        length = len(self.avg_qs)
+        for i in range(length):
             print("%f %f %f %f %f" % (self.avg_qs[i], self.max_episode_rewards[i], \
                 self.min_episode_rewards[i], self.avg_episode_rewards[i], self.eps), file=doc)
         doc.close()
@@ -147,8 +148,8 @@ class Agent:
         fig = plt.figure()
         plt.xlabel('episode')
         plt.ylabel('reward')
-        plt.plot(self.max_episode_rewards, color='r--', label='max_reward')
-        plt.plot(self.min_episode_rewards, color='g--', label='min_reward')
+        plt.plot(self.max_episode_rewards, 'r--', label='max_reward')
+        plt.plot(self.min_episode_rewards, 'g--', label='min_reward')
         plt.plot(self.avg_episode_rewards, color='b', label='avg_reward')
         plt.legend()
         plt.savefig(os.path.join(dir_name, "%s_reward_v%d.pdf" % (self.env_name, (self.step+1)/self.save_step)))
@@ -229,8 +230,8 @@ class Agent:
 
                 if self.step % self.save_step == self.save_step - 1:
                     self.save_checkpoint("checkpoints")
-                    self.save_figure("figures")
                     self.save_record("records")
+                    self.save_figure("figures")
 
     def play(self):
 
