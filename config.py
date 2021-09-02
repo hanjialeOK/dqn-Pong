@@ -33,7 +33,7 @@ class Config:
     _save_step = _test_step * 10
 
     env_name = "PongDeterministic-v4"
-    num_action = 3
+    num_action = 6
     screen_width  = 80
     screen_height = 80
     max_reward = 1.

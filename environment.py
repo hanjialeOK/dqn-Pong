@@ -33,8 +33,8 @@ class Environment:
         return preprocess(screen)
 
     def step(self, action):
-        assert action == 0 or action == 1 or action == 2, "action is out of range."
-        screen, reward, terminal, _ = self.env.step(action + 1)
+        assert action >= 0 and action <= 5, "action is out of range."
+        screen, reward, terminal, _ = self.env.step(action)
         screen = preprocess(screen)
         reward = max(self.min_reward, min(self.max_reward, reward))
         return screen, reward, terminal, _

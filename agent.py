@@ -33,7 +33,7 @@ class Agent:
         self.ep_end_t = config.ep_end_t
         self.eps = self.ep_start
         self.env_name = config.env_name
-        self.device = torch.device("cuda:0")
+        self.device = torch.device("cuda:2")
         self.local_network = Q_Network(self.history_length, self.num_action).to(self.device)
         self.target_network = Q_Network(self.history_length, self.num_action).to(self.device)
         self.update_target()
@@ -221,7 +221,7 @@ class Agent:
                     self.avg_episode_rewards.append(avg_episode_reward)
 
                     if avg_episode_reward >= max_avg_episode_reward * 0.9:
-                        self.save_model("models")
+                        self.save_model("models_normal")
                     max_avg_episode_reward = max(max_avg_episode_reward, avg_episode_reward)
 
                     total_reward = 0
@@ -231,9 +231,9 @@ class Agent:
                     episode_rewards = []
 
                 if self.step % self.save_step == self.save_step - 1:
-                    self.save_checkpoint("checkpoints")
-                    self.save_record("records")
-                    self.save_figure("figures")
+                    self.save_checkpoint("checkpoints_normal")
+                    self.save_record("records_normal")
+                    self.save_figure("figures_normal")
 
     def play(self):
 
