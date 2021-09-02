@@ -19,7 +19,7 @@ class Q_Network(nn.Module):
         x = self.fc2(x)
         return x
 
-# if __name__ == '__main__':
-#     net = Q_Network(4, 2)
-#     x = torch.ones(10, 4, 80, 80)
-#     out = net.forward(x)
+if __name__ == '__main__':
+    net = Q_Network(4, 3)
+    x = torch.ones(10, 4, 80, 80)
+    out = net.forward(x)
