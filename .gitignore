@@ -1,3 +1,6 @@
 __pycache__
 *.pth
 gymtest.py
+figures/
+records/
+checkpoints/
