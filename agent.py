@@ -63,13 +63,6 @@ class Agent:
         return torch.argmax(action_values).item()
 
     def update_local(self):
-        # experiences = random.sample(self.memory, self.bs)
-        # states = torch.from_numpy(np.vstack([e[0] for e in experiences])).float().to(self.device)
-        # actions = torch.from_numpy(np.vstack([e[1] for e in experiences])).long().to(self.device)
-        # rewards = torch.from_numpy(np.vstack([e[2] for e in experiences])).float().to(self.device)
-        # next_states = torch.from_numpy(np.vstack([e[3] for e in experiences])).float().to(self.device)
-        # dones = torch.from_numpy(np.vstack([e[4] for e in experiences]).astype(np.uint8)).float().to(self.device)
-
         # random sample
         states, actions, rewards, next_states, terminals = self.memory.sample()
         # [32, 4, 80, 80]
