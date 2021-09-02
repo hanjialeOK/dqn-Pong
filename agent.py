@@ -33,11 +33,11 @@ class Agent:
         self.ep_end_t = config.ep_end_t
         self.eps = self.ep_start
         self.env_name = config.env_name
-        self.device = torch.device("cuda:0")
-        self.local_network = Q_Network(self.history_length, self.num_action).to(self.device)
-        self.target_network = Q_Network(self.history_length, self.num_action).to(self.device)
-        self.update_target()
-        self.optimizer = optim.Adam(self.local_network.parameters(), self.learning_rate)
+        self.device = torch.device("cuda:2")
+        self.network = Q_Network(self.history_length, self.num_action).to(self.device)
+        self.network.synchronize()
+        # self.optimizer = optim.Adam(filter(lambda p: p.requires_grad, self.network.parameters()), self.learning_rate)
+        self.optimizer = optim.Adam(self.network.parameters(), self.learning_rate)
         self.memory = ReplayMemory(config)
         self.history = History(config)
         self.env = Environment(config)
@@ -51,7 +51,7 @@ class Agent:
             # [1, 4, 80, 80]
             states = torch.tensor(states, dtype=torch.float32).to(self.device)
             with torch.no_grad():
-                action_values = self.local_network(states)
+                action_values = self.network.online_forward(states)
             return torch.argmax(action_values).item()
         else:
             return random.choice(np.arange(self.num_action))
@@ -59,7 +59,7 @@ class Agent:
     def predict(self, states):
         states = torch.tensor(states, dtype=torch.float32).to(self.device)
         with torch.no_grad():
-            action_values = self.local_network(states)
+            action_values = self.network.online_forward(states)
         return torch.argmax(action_values).item()
 
     def update_local(self):
@@ -77,12 +77,12 @@ class Agent:
         assert terminals.shape == (self.batch_size, 1), "terminals.shape is not correct."
         terminals = torch.tensor(terminals, dtype=torch.float32).to(self.device)
 
-        q_values = self.local_network(states)
+        q_values = self.network.online_forward(states)
         q_values = torch.gather(input=q_values, dim=-1, index=actions)
         self.total_q += torch.mean(q_values.detach()).item()
 
         with torch.no_grad():
-            q_targets = self.target_network(next_states)
+            q_targets = self.network.target_forward(next_states)
             q_targets, _ = torch.max(input=q_targets, dim=-1, keepdim=True)
             q_targets = rewards + self.discount * (1 - terminals) * q_targets
 
@@ -90,33 +90,36 @@ class Agent:
         loss = torch.mean(torch.pow((q_targets - q_values), 2))
         self.total_loss += loss.detach().item()
 
+        # old1 = self.network.fc1_target.weight.data.cpu()
+        # old2 = self.network.fc2_target.weight.data.cpu()
+
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
-        self.update_count += 1
+        # new1 = self.network.fc1_target.weight.data.cpu()
+        # new2 = self.network.fc2_target.weight.data.cpu()
+        # assert old1.equal(new1) == True and old2.equal(new2) == True, "parameters of online should not be changed"
 
-    def update_target(self, tau=1.):
-        for local_param, target_param in zip(self.local_network.parameters(), self.target_network.parameters()):
-            target_param.data.copy_(tau * local_param.data + (1 - tau) * target_param.data)
+        self.update_count += 1
 
     def learn(self):
         if self.step >= self.learn_start:
             if self.step % self.train_frequency == 0:
                 self.update_local()
             if self.step % self.target_q_update_step == self.target_q_update_step - 1:
-                self.update_target()
+                self.network.synchronize()
 
     def save_model(self, dir_name="models"):
         if not os.path.exists(dir_name):
             os.mkdir(dir_name)
-        torch.save(self.local_network.state_dict(), \
+        torch.save(self.network.state_dict(), \
             os.path.join(dir_name, "%s_v%d.pth" % (self.env_name, (self.step+1)/self.test_step)))
 
     def save_checkpoint(self, dir_name="checkpoints"):
         if not os.path.exists(dir_name):
             os.mkdir(dir_name)
-        torch.save(self.local_network.state_dict(), \
+        torch.save(self.network.state_dict(), \
             os.path.join(dir_name, "%s_v%d.pth" % (self.env_name, (self.step+1)/self.save_step)))
 
     def save_record(self, dir_name="records"):
@@ -221,7 +224,7 @@ class Agent:
                     self.avg_episode_rewards.append(avg_episode_reward)
 
                     if avg_episode_reward >= max_avg_episode_reward * 0.9:
-                        self.save_model("models")
+                        self.save_model("models_combine")
                     max_avg_episode_reward = max(max_avg_episode_reward, avg_episode_reward)
 
                     total_reward = 0
@@ -231,16 +234,16 @@ class Agent:
                     episode_rewards = []
 
                 if self.step % self.save_step == self.save_step - 1:
-                    self.save_checkpoint("checkpoints")
-                    self.save_record("records")
-                    self.save_figure("figures")
+                    self.save_checkpoint("checkpoints_combine")
+                    self.save_record("records_combine")
+                    self.save_figure("figures_combine")
 
     def play(self):
 
         print("loading weight...")
-        self.local_network.to('cpu')
-        self.local_network.load_state_dict(torch.load("./checkpoints/%s_v20.pth" % (self.env_name)))
-        self.local_network.to(self.device)
+        self.network.to('cpu')
+        self.network.load_state_dict(torch.load("./checkpoints/%s_v20.pth" % (self.env_name)))
+        self.network.to(self.device)
         print("weight loaded successfully.")
 
         screen = self.env.new_random_game()

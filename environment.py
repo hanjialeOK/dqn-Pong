@@ -29,12 +29,12 @@ class Environment:
     def new_random_game(self):
         screen = self.env.reset()
         for _ in range(random.choice(np.arange(self.random_start))):
-            screen, reward, terminal, _ = self.env.step(0 + 1)
+            screen, reward, terminal, _ = self.env.step(0)
         return preprocess(screen)
 
     def step(self, action):
-        assert action == 0 or action == 1 or action == 2, "action is out of range."
-        screen, reward, terminal, _ = self.env.step(action + 1)
+        assert action >= 0 and action <= 5, "action is out of range."
+        screen, reward, terminal, _ = self.env.step(action)
         screen = preprocess(screen)
         reward = max(self.min_reward, min(self.max_reward, reward))
         return screen, reward, terminal, _
