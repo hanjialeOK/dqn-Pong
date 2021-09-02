@@ -32,7 +32,7 @@ class Config:
     _test_step = 5 * scale
     _save_step = _test_step * 10
 
-    env_name = "Pong-v0"
+    env_name = "PongDeterministic-v4"
     num_action = 3
     screen_width  = 80
     screen_height = 80
