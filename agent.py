@@ -52,7 +52,7 @@ class Agent:
             states = torch.tensor(states, dtype=torch.float32).to(self.device)
             with torch.no_grad():
                 action_values = self.local_network(states)
-            return np.argmax(action_values.cpu().data.numpy())
+            return torch.argmax(action_values).item()
         else:
             return random.choice(np.arange(self.num_action))
 
@@ -60,7 +60,7 @@ class Agent:
         states = torch.tensor(states, dtype=torch.float32).to(self.device)
         with torch.no_grad():
             action_values = self.local_network(states)
-        return np.argmax(action_values.cpu().data.numpy())
+        return torch.argmax(action_values).item()
 
     def update_local(self):
         # experiences = random.sample(self.memory, self.bs)
@@ -86,7 +86,7 @@ class Agent:
 
         q_values = self.local_network(states)
         q_values = torch.gather(input=q_values, dim=-1, index=actions)
-        self.total_q += torch.mean(q_values.detach()).cpu().item()
+        self.total_q += torch.mean(q_values.detach()).item()
 
         with torch.no_grad():
             q_targets = self.target_network(next_states)
@@ -95,11 +95,13 @@ class Agent:
 
         # loss = (q_targets - q_values).pow(2).mean()
         loss = torch.mean(torch.pow((q_targets - q_values), 2))
-        self.total_loss += loss
+        self.total_loss += loss.detach().item()
 
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
+
+        self.update_count += 1
 
     def update_target(self, tau=1.):
         for local_param, target_param in zip(self.local_network.parameters(), self.target_network.parameters()):
@@ -109,7 +111,6 @@ class Agent:
         if self.step >= self.learn_start:
             if self.step % self.train_frequency == 0:
                 self.update_local()
-                self.update_count += 1
             if self.step % self.target_q_update_step == self.target_q_update_step - 1:
                 self.update_target()
 
@@ -131,7 +132,7 @@ class Agent:
         doc = open(os.path.join(dir_name, "%s_record_v%d.txt" % (self.env_name, (self.step+1)/self.save_step)), 'w')
         length = len(self.avg_qs)
         for i in range(length):
-            print("%f %f %f %f %f" % (self.avg_qs[i], self.max_episode_rewards[i], \
+            print("%f %f %f %f %f %f" % (self.avg_qs[i], self.avg_losses[i], self.max_episode_rewards[i], \
                 self.min_episode_rewards[i], self.avg_episode_rewards[i], self.eps), file=doc)
         doc.close()
 
@@ -146,11 +147,17 @@ class Agent:
         plt.savefig(os.path.join(dir_name, "%s_avg_q_v%d.pdf" % (self.env_name, (self.step+1)/self.save_step)))
 
         fig = plt.figure()
+        plt.xlabel('step')
+        plt.ylabel('avg_loss')
+        plt.plot(self.avg_losses)
+        plt.savefig(os.path.join(dir_name, "%s_avg_loss_v%d.pdf" % (self.env_name, (self.step+1)/self.save_step)))
+
+        fig = plt.figure()
         plt.xlabel('episode')
         plt.ylabel('reward')
         plt.plot(self.max_episode_rewards, 'r--', label='max_reward')
-        plt.plot(self.min_episode_rewards, 'g--', label='min_reward')
         plt.plot(self.avg_episode_rewards, color='b', label='avg_reward')
+        plt.plot(self.min_episode_rewards, 'g--', label='min_reward')
         plt.legend()
         plt.savefig(os.path.join(dir_name, "%s_reward_v%d.pdf" % (self.env_name, (self.step+1)/self.save_step)))
 
@@ -160,6 +167,7 @@ class Agent:
         max_avg_episode_reward = 0
         episode_rewards = []
         self.avg_qs, self.max_episode_rewards, self.min_episode_rewards, self.avg_episode_rewards = [], [], [], []
+        self.avg_losses = []
 
         screen = self.env.new_random_game()
         for _ in range(self.history_length):
@@ -214,6 +222,7 @@ class Agent:
                         max_episode_reward, min_episode_reward, avg_episode_reward = 0., 0., 0.
 
                     self.avg_qs.append(avg_q)
+                    self.avg_losses.append(avg_loss)
                     self.max_episode_rewards.append(max_episode_reward)
                     self.min_episode_rewards.append(min_episode_reward)
                     self.avg_episode_rewards.append(avg_episode_reward)
@@ -237,7 +246,7 @@ class Agent:
 
         print("loading weight...")
         self.local_network.to('cpu')
-        self.local_network.load_state_dict(torch.load("%s_v43.pth" % (self.env_name)))
+        self.local_network.load_state_dict(torch.load("./checkpoints/%s_v20.pth" % (self.env_name)))
         self.local_network.to(self.device)
         print("weight loaded successfully.")
 
@@ -260,16 +269,17 @@ class Agent:
             episode_reward += reward
 
             if terminal == True:
+                self.env.env.seed(step)
                 self.env.new_random_game()
                 for _ in range(self.history_length):
                     self.history.add(screen)
 
-                print("episode: %d, reward: %f" % (num_game, episode_reward))
+                print("episode: %d, reward: %d" % (num_game, episode_reward))
                 episode_reward = 0
                 num_game += 1
             else:
                 self.history.add(screen)
 
-            # time.sleep(0.01)
+            time.sleep(0.05)
         
         self.env.close()
