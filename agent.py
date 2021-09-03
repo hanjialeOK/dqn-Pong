@@ -33,7 +33,7 @@ class Agent:
         self.ep_end_t = config.ep_end_t
         self.eps = self.ep_start
         self.env_name = config.env_name
-        self.device = torch.device("cuda:2")
+        self.device = torch.device("cuda:1")
         self.local_network = Q_Network(self.history_length, self.num_action).to(self.device)
         self.target_network = Q_Network(self.history_length, self.num_action).to(self.device)
         self.update_target()
@@ -109,19 +109,19 @@ class Agent:
 
     def save_model(self, dir_name="models"):
         if not os.path.exists(dir_name):
-            os.mkdir(dir_name)
+            os.makedirs(dir_name)
         torch.save(self.local_network.state_dict(), \
             os.path.join(dir_name, "%s_v%d.pth" % (self.env_name, (self.step+1)/self.test_step)))
 
     def save_checkpoint(self, dir_name="checkpoints"):
         if not os.path.exists(dir_name):
-            os.mkdir(dir_name)
+            os.makedirs(dir_name)
         torch.save(self.local_network.state_dict(), \
             os.path.join(dir_name, "%s_v%d.pth" % (self.env_name, (self.step+1)/self.save_step)))
 
     def save_record(self, dir_name="records"):
         if not os.path.exists(dir_name):
-            os.mkdir(dir_name)
+            os.makedirs(dir_name)
         doc = open(os.path.join(dir_name, "%s_record_v%d.txt" % (self.env_name, (self.step+1)/self.save_step)), 'w')
         length = len(self.avg_qs)
         for i in range(length):
@@ -131,7 +131,7 @@ class Agent:
 
     def save_figure(self, dir_name="figures"):
         if not os.path.exists(dir_name):
-            os.mkdir(dir_name)
+            os.makedirs(dir_name)
 
         fig = plt.figure()
         plt.xlabel('step')
@@ -165,6 +165,8 @@ class Agent:
         screen = self.env.new_random_game()
         for _ in range(self.history_length):
             self.history.add(screen)
+        
+        prefix = "data/normal/%s/c3a6/" % self.env_name
 
         for self.step in tqdm(range(0, self.max_step), ncols=70, initial=0):
             # initialize
@@ -172,7 +174,7 @@ class Agent:
                 num_game, self.update_count, episode_reward = 0, 0, 0
                 total_reward, self.total_loss, self.total_q = 0., 0., 0.
                 episode_rewards = []
-            
+
             # 1. predict
             action = self.predict_ep_greedy(self.history.get())
 
@@ -221,7 +223,7 @@ class Agent:
                     self.avg_episode_rewards.append(avg_episode_reward)
 
                     if avg_episode_reward >= max_avg_episode_reward * 0.9:
-                        self.save_model("models_normal")
+                        self.save_model(prefix + "models")
                     max_avg_episode_reward = max(max_avg_episode_reward, avg_episode_reward)
 
                     total_reward = 0
@@ -231,15 +233,15 @@ class Agent:
                     episode_rewards = []
 
                 if self.step % self.save_step == self.save_step - 1:
-                    self.save_checkpoint("checkpoints_normal")
-                    self.save_record("records_normal")
-                    self.save_figure("figures_normal")
+                    self.save_checkpoint(prefix + "checkpoints")
+                    self.save_record(prefix + "records")
+                    self.save_figure(prefix + "figures")
 
     def play(self):
 
         print("loading weight...")
         self.local_network.to('cpu')
-        self.local_network.load_state_dict(torch.load("./checkpoints/%s_v20.pth" % (self.env_name)))
+        self.local_network.load_state_dict(torch.load("./checkpoints_normal/%s_v12.pth" % (self.env_name)))
         self.local_network.to(self.device)
         print("weight loaded successfully.")
 
@@ -262,7 +264,7 @@ class Agent:
             episode_reward += reward
 
             if terminal == True:
-                self.env.env.seed(step)
+                # self.env.env.seed(step)
                 self.env.new_random_game()
                 for _ in range(self.history_length):
                     self.history.add(screen)
@@ -274,5 +276,5 @@ class Agent:
                 self.history.add(screen)
 
             time.sleep(0.05)
-        
+
         self.env.close()
