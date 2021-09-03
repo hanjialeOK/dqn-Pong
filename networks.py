@@ -6,7 +6,7 @@ class Q_Network(nn.Module):
 
     def __init__(self, num_frame, num_action):
         super(Q_Network, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels=num_frame, out_channels=32, kernel_size=8, stride=4, padding=2)
+        self.conv1 = nn.Conv2d(in_channels=num_frame, out_channels=32, kernel_size=8, stride=4)
         self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=2)
         self.conv3 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1)
         self.fc1 = nn.Linear(64*7*7, 512)
@@ -23,5 +23,5 @@ class Q_Network(nn.Module):
 
 if __name__ == '__main__':
     net = Q_Network(4, 3)
-    x = torch.ones(10, 4, 80, 80)
+    x = torch.ones(10, 4, 84, 84)
     out = net.forward(x)
