@@ -242,7 +242,7 @@ class Agent:
 
         print("loading weight...")
         self.network.to('cpu')
-        self.network.load_state_dict(torch.load("./checkpoints/%s_v20.pth" % (self.env_name)))
+        self.network.load_state_dict(torch.load("./checkpoints_combine/%s_v7.pth" % (self.env_name)))
         self.network.to(self.device)
         print("weight loaded successfully.")
 
