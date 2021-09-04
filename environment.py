@@ -36,7 +36,8 @@ class Environment:
 
     def preprocess(self, image):
         # image = image[::2, ::2]
-        image = np.mean(image, axis=2, keepdims=False)
+        # image = np.mean(image, axis=2, keepdims=False)
+        image = np.dot(image[...,:3], [0.299, 0.587, 0.114])
         image = image/255
         # image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
         image = cv2.resize(image, self.dims, interpolation=cv2.INTER_AREA)
