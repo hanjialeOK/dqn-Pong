@@ -34,7 +34,7 @@ class Config:
 
     env_name = "PongDeterministic-v4"
     num_action = 6
-    screen_width  = 80
-    screen_height = 80
+    screen_width  = 84
+    screen_height = 84
     max_reward = 1.
     min_reward = -1.
