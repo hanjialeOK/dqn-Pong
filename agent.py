@@ -112,19 +112,19 @@ class Agent:
 
     def save_model(self, dir_name="models"):
         if not os.path.exists(dir_name):
-            os.mkdir(dir_name)
+            os.makedirs(dir_name)
         torch.save(self.network.state_dict(), \
             os.path.join(dir_name, "%s_v%d.pth" % (self.env_name, (self.step+1)/self.test_step)))
 
     def save_checkpoint(self, dir_name="checkpoints"):
         if not os.path.exists(dir_name):
-            os.mkdir(dir_name)
+            os.makedirs(dir_name)
         torch.save(self.network.state_dict(), \
             os.path.join(dir_name, "%s_v%d.pth" % (self.env_name, (self.step+1)/self.save_step)))
 
     def save_record(self, dir_name="records"):
         if not os.path.exists(dir_name):
-            os.mkdir(dir_name)
+            os.makedirs(dir_name)
         doc = open(os.path.join(dir_name, "%s_record_v%d.txt" % (self.env_name, (self.step+1)/self.save_step)), 'w')
         length = len(self.avg_qs)
         for i in range(length):
@@ -134,7 +134,7 @@ class Agent:
 
     def save_figure(self, dir_name="figures"):
         if not os.path.exists(dir_name):
-            os.mkdir(dir_name)
+            os.makedirs(dir_name)
 
         fig = plt.figure()
         plt.xlabel('step')
@@ -168,6 +168,8 @@ class Agent:
         screen = self.env.new_random_game()
         for _ in range(self.history_length):
             self.history.add(screen)
+
+        prefix = "data/combine/%s/c3a6/" % self.env_name
 
         for self.step in tqdm(range(0, self.max_step), ncols=70, initial=0):
             # initialize
@@ -224,7 +226,7 @@ class Agent:
                     self.avg_episode_rewards.append(avg_episode_reward)
 
                     if avg_episode_reward >= max_avg_episode_reward * 0.9:
-                        self.save_model("models_combine")
+                        self.save_model(prefix + "models")
                     max_avg_episode_reward = max(max_avg_episode_reward, avg_episode_reward)
 
                     total_reward = 0
@@ -234,9 +236,9 @@ class Agent:
                     episode_rewards = []
 
                 if self.step % self.save_step == self.save_step - 1:
-                    self.save_checkpoint("checkpoints_combine")
-                    self.save_record("records_combine")
-                    self.save_figure("figures_combine")
+                    self.save_checkpoint(prefix + "checkpoints")
+                    self.save_record(prefix + "records")
+                    self.save_figure(prefix + "figures")
 
     def play(self):
 
