@@ -32,7 +32,7 @@ class Config:
     _test_step = 5 * scale
     _save_step = _test_step * 10
 
-    env_name = "PongDeterministic-v4"
+    env_name = "PongNoFrameskip-v4"
     num_action = 6
     screen_width  = 84
     screen_height = 84

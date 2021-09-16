@@ -166,7 +166,7 @@ class Agent:
         for _ in range(self.history_length):
             self.history.add(screen)
         
-        prefix = "data/normal/%s/c3a6_1/" % self.env_name
+        prefix = "data/normal/%s/c3a6_2/" % self.env_name
 
         for self.step in tqdm(range(0, self.max_step), ncols=70, initial=0):
             # initialize
