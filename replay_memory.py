@@ -3,24 +3,24 @@ import random
 
 class ReplayMemory:
     # TODO: -> None
-    def __init__(self, config) -> None:
+    def __init__(self, config):
         self.memory_size = config.memory_size
         self.batch_size = config.batch_size
         self.history_length = config.history_length
         self.actions = np.empty(self.memory_size, dtype=np.uint8)
-        self.screens = np.empty((self.memory_size, config.screen_height, config.screen_width), dtype=np.float16)
-        self.rewards = np.empty(self.memory_size, dtype=np.int8)
+        self.screens = np.empty((self.memory_size, config.screen_height, config.screen_width), dtype=np.uint8)
+        self.rewards = np.empty(self.memory_size, dtype=np.int32)
         self.terminals = np.empty(self.memory_size, dtype=np.bool_)
         self.dims = (config.screen_height, config.screen_width)
         self.current = 0
         self.count = 0
 
         # TODO: pre-allocate prestates and poststates for minibatch
-        self.prestates = np.empty((self.batch_size, self.history_length) + self.dims, dtype=np.float16)
-        self.poststates = np.empty((self.batch_size, self.history_length) + self.dims, dtype=np.float16)
+        self.prestates = np.empty((self.batch_size, self.history_length) + self.dims, dtype=np.uint8)
+        self.poststates = np.empty((self.batch_size, self.history_length) + self.dims, dtype=np.uint8)
 
     def add(self, action, screen, reward, terminal):
-        assert screen.shape == self.dims, "screen's shape is unexpected."
+        assert screen.shape == self.dims, "Screen's shape is unexpected."
         self.actions[self.current] = action
         self.screens[self.current, ...] = screen
         self.rewards[self.current] = reward
@@ -30,12 +30,12 @@ class ReplayMemory:
         self.current = (self.current + 1) % self.memory_size
 
     def getState(self, index):
-        assert self.count > 0, " memory is empty."
-        assert index >= self.history_length - 1 and index < self.count, "index is out of range."
+        assert self.count > 0, "Memory is empty."
+        assert index >= self.history_length - 1 and index < self.count, "Index is out of range."
         return self.screens[(index - (self.history_length - 1)):(index + 1), ...]
 
     def sample(self):
-        assert self.count > self.history_length, "memory is less than history_length."
+        assert self.count > self.history_length, "Memory is less than history_length."
         indexes = []
         while len(indexes) < self.batch_size:
             while True:

@@ -8,10 +8,10 @@ import time
 import os
 import matplotlib.pyplot as plt
 
-from networks import Q_Network
+from networks import Q_Network, Q_Network2
 from replay_memory import ReplayMemory
 from history import History
-from environment import Environment
+from environment import EnvironmentFrameSkip, EnvironmentNoFrameSkip
 
 class Agent:
     def __init__(self, config):
@@ -33,14 +33,14 @@ class Agent:
         self.ep_end_t = config.ep_end_t
         self.eps = self.ep_start
         self.env_name = config.env_name
-        self.device = torch.device("cuda:1")
-        self.local_network = Q_Network(self.history_length, self.num_action).to(self.device)
-        self.target_network = Q_Network(self.history_length, self.num_action).to(self.device)
+        self.device = torch.device("cpu")
+        self.local_network = Q_Network2(self.history_length, self.num_action).to(self.device)
+        self.target_network = Q_Network2(self.history_length, self.num_action).to(self.device)
         self.update_target()
         self.optimizer = optim.Adam(self.local_network.parameters(), self.learning_rate)
         self.memory = ReplayMemory(config)
         self.history = History(config)
-        self.env = Environment(config)
+        self.env = EnvironmentFrameSkip(config)
 
     def predict_ep_greedy(self, states):
         # TODO: record eps
@@ -65,13 +65,13 @@ class Agent:
     def update_local(self):
         # random sample
         states, actions, rewards, next_states, terminals = self.memory.sample()
-        # [32, 4, 80, 80]
+        # [32, 4, 84, 84]
         states = torch.tensor(states, dtype=torch.float32).to(self.device)
         # [32, 1]
         actions = torch.tensor(actions, dtype=torch.int64).to(self.device)
         # [32, 1]
         rewards = torch.tensor(rewards, dtype=torch.float32).to(self.device)
-        # [32, 4, 80, 80]
+        # [32, 4, 84, 84]
         next_states = torch.tensor(next_states, dtype=torch.float32).to(self.device)
         # [32, 1]
         assert terminals.shape == (self.batch_size, 1), "terminals.shape is not correct."
@@ -166,7 +166,7 @@ class Agent:
         for _ in range(self.history_length):
             self.history.add(screen)
         
-        prefix = "data/normal/%s/c3a6_2/" % self.env_name
+        prefix = "data/normal/%s/c2a6_crop_0/" % self.env_name
 
         for self.step in tqdm(range(0, self.max_step), ncols=70, initial=0):
             # initialize
